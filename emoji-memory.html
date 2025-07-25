@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Juego de Memoria de Emojis</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+    <div id="root"></div>
+    
+    <script type="text/babel">
+        const { useState, useEffect, useCallback } = React;
+        
+        const EmojiMemoryGame = () => {
+          const [currentLevel, setCurrentLevel] = useState(1);
+          const [cards, setCards] = useState([]);
+          const [flippedCards, setFlippedCards] = useState([]);
+          const [matchedPairs, setMatchedPairs] = useState([]);
+          const [moves, setMoves] = useState(0);
+          const [time, setTime] = useState(0);
+          const [gameStarted, setGameStarted] = useState(false);
+          const [gameCompleted, setGameCompleted] = useState(false);
+          const [isChecking, setIsChecking] = useState(false);
+
+          const levelConfig = {
+            1: { rows: 4, cols: 4, pairs: 8, name: "Principiante" },
+            2: { rows: 4, cols: 6, pairs: 12, name: "Intermedio" },
+            3: { rows: 6, cols: 6, pairs: 18, name: "Avanzado" },
+            4: { rows: 6, cols: 8, pairs: 24, name: "Experto" }
+          };
+
+          const emojiSets = [
+            '🌟', '🎨', '🦋', '🌸', '⚡', '🎭', '🔮', '💎',
+            '🌙', '🎪', '🎯', '🎲', '🎻', '🎺', '🎸', '🎹',
+            '🌺', '🌻', '🌷', '🌹', '🌼', '🌵', '🌴', '🌳',
+            '🦄', '🐉', '🦊', '🐺', '🦅', '🐙', '🦜', '🐢'
+          ];
+
+          const shuffleArray = (array) => {
+            const newArray = [...array];
+            for (let i = newArray.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1));
+              [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+            }
+            return newArray;
+          };
+
+          const initializeGame = useCallback((level) => {
+            const config = levelConfig[level];
+            const selectedEmojis = emojiSets.slice(0, config.pairs);
+            const cardPairs = [...selectedEmojis, ...selectedEmojis];
+            const shuffledCards = shuffleArray(cardPairs).map((emoji, index) => ({
+              id: index,
+              emoji,
+              isFlipped: false,
+              isMatched: false
+            }));
+            
+            setCards(shuffledCards);
+            setFlippedCards([]);
+            setMatchedPairs([]);
+            setMoves(0);
+            setTime(0);
+            setGameStarted(false);
+            setGameCompleted(false);
+            setIsChecking(false);
+          }, []);
+
+          useEffect(() => {
+            initializeGame(currentLevel);
+          }, [currentLevel, initializeGame]);
+
+          useEffect(() => {
+            let interval = null;
+            if (gameStarted && !gameCompleted) {
+              interval = setInterval(() => {
+                setTime((prevTime) => prevTime + 1);
+              }, 1000);
+            } else {
+              clearInterval(interval);
+            }
+            return () => clearInterval(interval);
+          }, [gameStarted, gameCompleted]);
+
+          const handleCardClick = (cardId) => {
+            if (isChecking || flippedCards.length >= 2) return;
+            
+            const card = cards.find(c => c.id === cardId);
+            if (card.isFlipped || card.isMatched) return;
+
+            if (!gameStarted) {
+              setGameStarted(true);
+            }
+
+            const newFlippedCards = [...flippedCards, cardId];
+            setFlippedCards(newFlippedCards);
+            
+            setCards(prevCards => 
+              prevCards.map(c => 
+                c.id === cardId ? { ...c, isFlipped: true } : c
+              )
+            );
+
+            if (newFlippedCards.length === 2) {
+              setMoves(prev => prev + 1);
+              setIsChecking(true);
+              
+              const [firstId, secondId] = newFlippedCards;
+              const firstCard = cards.find(c => c.id === firstId);
+              const secondCard = cards.find(c => c.id === secondId);
+
+              setTimeout(() => {
+                if (firstCard.emoji === secondCard.emoji) {
+                  setCards(prevCards =>
+                    prevCards.map(c =>
+                      c.id === firstId || c.id === secondId
+                        ? { ...c, isMatched: true }
+                        : c
+                    )
+                  );
+                  setMatchedPairs(prev => [...prev, firstCard.emoji]);
+                } else {
+                  setCards(prevCards =>
+                    prevCards.map(c =>
+                      c.id === firstId || c.id === secondId
+                        ? { ...c, isFlipped: false }
+                        : c
+                    )
+                  );
+                }
+                setFlippedCards([]);
+                setIsChecking(false);
+              }, 1000);
+            }
+          };
+
+          useEffect(() => {
+            if (matchedPairs.length === levelConfig[currentLevel].pairs) {
+              setGameCompleted(true);
+              setGameStarted(false);
+            }
+          }, [matchedPairs, currentLevel]);
+
+          const nextLevel = () => {
+            if (currentLevel < 4) {
+              setCurrentLevel(prev => prev + 1);
+            }
+          };
+
+          const resetGame = () => {
+            initializeGame(currentLevel);
+          };
+
+          const formatTime = (seconds) => {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+          };
+
+          const getGridClass = () => {
+            const config = levelConfig[currentLevel];
+            return `grid gap-3 justify-center items-center`;
+          };
+
+          const getGridStyle = () => {
+            const config = levelConfig[currentLevel];
+            return {
+              gridTemplateColumns: `repeat(${config.cols}, 1fr)`,
+              gridTemplateRows: `repeat(${config.rows}, 1fr)`,
+              maxWidth: `${config.cols * 80}px`,
+              maxHeight: `${config.rows * 80}px`
+            };
+          };
+
+          return React.createElement('div', {
+            className: "min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex flex-col items-center justify-center p-4"
+          }, 
+            React.createElement('div', {
+              className: "bg-slate-800/80 backdrop-blur-sm rounded-2xl shadow-2xl border border-slate-700/50 p-8 max-w-4xl w-full"
+            },
+              // Header
+              React.createElement('div', { className: "text-center mb-8" },
+                React.createElement('h1', {
+                  className: "text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-400 mb-2"
+                }, "🧠 Memoria de Emojis"),
+                
+                React.createElement('div', { className: "flex justify-center items-center gap-6 mb-4" },
+                  React.createElement('div', { className: "bg-slate-700/50 rounded-lg px-4 py-2" },
+                    React.createElement('span', { className: "text-yellow-400 font-semibold" }, `Nivel ${currentLevel}`),
+                    React.createElement('span', { className: "text-slate-300 ml-2" }, `(${levelConfig[currentLevel].name})`)
+                  ),
+                  React.createElement('div', { className: "bg-slate-700/50 rounded-lg px-4 py-2" },
+                    React.createElement('span', { className: "text-blue-400" }, `⏱️ ${formatTime(time)}`)
+                  ),
+                  React.createElement('div', { className: "bg-slate-700/50 rounded-lg px-4 py-2" },
+                    React.createElement('span', { className: "text-green-400" }, `🎯 ${moves} movimientos`)
+                  )
+                ),
+                
+                // Progress Bar
+                React.createElement('div', { className: "w-full bg-slate-700 rounded-full h-2 mb-4" },
+                  React.createElement('div', {
+                    className: "bg-gradient-to-r from-yellow-400 to-orange-400 h-2 rounded-full transition-all duration-500",
+                    style: { width: `${(matchedPairs.length / levelConfig[currentLevel].pairs) * 100}%` }
+                  })
+                )
+              ),
+
+              // Game Board
+              React.createElement('div', { className: "flex justify-center mb-8" },
+                React.createElement('div', { 
+                  className: getGridClass(), 
+                  style: getGridStyle() 
+                },
+                  cards.map((card) =>
+                    React.createElement('div', {
+                      key: card.id,
+                      onClick: () => handleCardClick(card.id),
+                      className: `w-16 h-16 rounded-xl cursor-pointer transition-all duration-300 flex items-center justify-center text-2xl font-bold ${
+                        card.isFlipped || card.isMatched 
+                          ? card.isMatched 
+                            ? 'bg-gradient-to-br from-green-500 to-emerald-600 shadow-lg shadow-green-500/25 scale-105' 
+                            : 'bg-gradient-to-br from-blue-500 to-purple-600 shadow-lg shadow-blue-500/25'
+                          : 'bg-gradient-to-br from-slate-600 to-slate-700 hover:from-slate-500 hover:to-slate-600 shadow-lg hover:shadow-xl hover:scale-105'
+                      } ${isChecking ? 'pointer-events-none' : ''}`
+                    }, card.isFlipped || card.isMatched ? card.emoji : '❓')
+                  )
+                )
+              ),
+
+              // Game Completed
+              gameCompleted && React.createElement('div', { className: "text-center mb-6" },
+                React.createElement('div', { className: "bg-gradient-to-r from-yellow-400/20 to-orange-400/20 border border-yellow-400/30 rounded-2xl p-6 mb-4" },
+                  React.createElement('h2', { className: "text-3xl font-bold text-yellow-400 mb-2" }, "🎉 ¡Nivel Completado!"),
+                  React.createElement('p', { className: "text-slate-300 mb-4" }, `Terminaste en ${formatTime(time)} con ${moves} movimientos`),
+                  React.createElement('div', { className: "flex justify-center gap-4" },
+                    currentLevel < 4 ? 
+                      React.createElement('button', {
+                        onClick: nextLevel,
+                        className: "bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold py-3 px-6 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-lg"
+                      }, "🚀 Siguiente Nivel") :
+                      React.createElement('div', { className: "text-center" },
+                        React.createElement('p', { className: "text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-400 mb-2" }, "🏆 ¡Todos los niveles completados!"),
+                        React.createElement('p', { className: "text-slate-300" }, "¡Eres un maestro de la memoria!")
+                      )
+                  )
+                )
+              ),
+
+              // Controls
+              React.createElement('div', { className: "flex justify-center gap-4" },
+                React.createElement('button', {
+                  onClick: resetGame,
+                  className: "bg-gradient-to-r from-slate-600 to-slate-700 hover:from-slate-500 hover:to-slate-600 text-white font-bold py-3 px-6 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-lg"
+                }, "🔄 Reiniciar Nivel"),
+                
+                currentLevel > 1 && React.createElement('button', {
+                  onClick: () => setCurrentLevel(prev => prev - 1),
+                  className: "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-3 px-6 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-lg"
+                }, "⬅️ Nivel Anterior")
+              ),
+
+              // Level Indicators
+              React.createElement('div', { className: "flex justify-center gap-2 mt-6" },
+                [1, 2, 3, 4].map((level) =>
+                  React.createElement('div', {
+                    key: level,
+                    className: `w-3 h-3 rounded-full transition-all duration-300 ${
+                      level === currentLevel
+                        ? 'bg-yellow-400 shadow-lg shadow-yellow-400/50'
+                        : level < currentLevel
+                        ? 'bg-green-400'
+                        : 'bg-slate-600'
+                    }`
+                  })
+                )
+              )
+            )
+          );
+        };
+
+        ReactDOM.render(React.createElement(EmojiMemoryGame), document.getElementById('root'));
+    </script>
+</body>
+</html>
